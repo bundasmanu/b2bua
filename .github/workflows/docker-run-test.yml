@@ -3,6 +3,7 @@
 name: Docker Build + Run Test
 
 on:
+  pull_request:
   push:
     branches:
       - 'main'
