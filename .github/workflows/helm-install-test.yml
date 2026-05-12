@@ -45,6 +45,9 @@ jobs:
       - name: Import image into k3d cluster
         run: k3d image import bundasmanu/b2bua:ci -c "${{ env.K3D_CLUSTER_NAME }}"
 
+      - name: Create namespace
+        run: kubectl create namespace b2bua
+
       - name: Lint chart
         run: helm lint k8s/helm/b2bua
 
