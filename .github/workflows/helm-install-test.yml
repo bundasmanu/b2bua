@@ -37,7 +37,6 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          target: b2bua
           push: false
           load: true
           tags: bundasmanu/b2bua:ci
