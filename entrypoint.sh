@@ -10,7 +10,7 @@ case "$1" in
         ;;
     start)
         echo "[INFO] Running...\n"
-        ./b2bua
+        ./b2bua sip:127.0.0.1:5060
         ;;
     *)
         echo "Executing custom command"
