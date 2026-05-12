@@ -29,4 +29,4 @@ jobs:
           platforms: linux/amd64
 
       - name: Run Docker image
-        run: docker run b2bua:test
+        run: docker run b2bua:test sip:127.0.0.1:5060

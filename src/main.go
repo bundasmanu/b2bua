@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: MPL-2.0
 // SPDX-FileCopyrightText: Copyright (c) 2024, Emir Aganovic
 
+/* TODO: Two things should be added as dependencies
+1- An argument defining the BindHost to be used (Transport) - must use the statefulset IP address from k8s passed via helm ENV var + entrypoint.sh argument definition on binary run
+2- An argument defining the Core Server DNS expected to listen/send Requests - must use the Service DNS from k8s Core Server service, declared again as an ENV var passed via helm + entrypoint.sh argument definition on binary run
+*/
+
 package main
 
 import (
