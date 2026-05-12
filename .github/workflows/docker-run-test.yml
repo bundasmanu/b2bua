@@ -29,4 +29,6 @@ jobs:
           platforms: linux/amd64
 
       - name: Run Docker image
-        run: docker run b2bua:test
+        run: |
+          set -e
+          timeout 30s docker run --rm b2bua:test || [ "$?" -eq 124 ]
