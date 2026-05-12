@@ -30,5 +30,15 @@ jobs:
 
       - name: Run Docker image
         run: |
-          set -e
-          timeout 30s docker run --rm b2bua:test || [ "$?" -eq 124 ]
+          set -euo pipefail
+          container=$(docker run -d --rm b2bua:test)
+          echo "Started container $container"
+          if ! timeout 30s docker wait "$container"; then
+            rc=$?
+            if [ "$rc" -eq 124 ]; then
+              echo "Container did not exit within 30 seconds; stopping it and closing workflow with success."
+              docker stop "$container" >/dev/null || true
+              exit 0
+            fi
+            exit $rc
+          fi
