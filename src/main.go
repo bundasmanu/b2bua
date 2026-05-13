@@ -38,30 +38,71 @@ func main() {
 	examples.SetupLogger()
 
 	flag.Parse()
-	recipientUri := flag.Arg(0)
 
-	err := start(ctx, recipientUri)
+	// arguments
+	localAddr := flag.Arg(0)
+
+	coreProxyAddr:= flag.Arg(1)
+
+	coreProxyUri := sip.Uri{}
+	if err := sip.ParseUri("sip:" + coreProxyAddr + ":5060", &coreProxyUri); err != nil {
+		return err
+	}
+
+	err := start(ctx, localAddr, coreProxy)
 	if err != nil {
 		slog.Error("PBX finished with error", "error", err)
 	}
 }
 
-func start(ctx context.Context, recipientUri string) error {
+func start(ctx context.Context, localAddr string, coreProxyUri string) error {
 	// Setup our main transaction user
-	ua, _ := sipgo.NewUA()
-	d := diago.NewDiago(ua)
-
-	recipient := sip.Uri{}
-	if err := sip.ParseUri(recipientUri, &recipient); err != nil {
-		return err
+	ua, err := sipgo.NewUA()
+	if err != nil {
+		panic(err)
 	}
 
+	srv, err := sipgo.NewServer(ua)
+	if err != nil {
+		panic(err)
+	}
+
+	d := diago.NewDiago(ua,
+		WithTransport(
+			Transport{
+				Transport: "udp",
+				BindHost:  localAddr,
+				BindPort:  5060,
+			},
+		WithServer(srv)
+	))
+
+	srv.OnOptions(handleOptions)
+
 	return d.Serve(ctx, func(inDialog *diago.DialogServerSession) {
-		BridgeCall(d, inDialog, recipient)
+		BridgeCall(d, inDialog, coreProxyUri)
 	})
 }
 
-func BridgeCall(d *diago.Diago, inDialog *diago.DialogServerSession, recipient sip.Uri) error {
+func handleOptions(req *sip.Request, tx sip.ServerTransaction) {
+
+	src := req.Source()
+
+	log.Println("OPTIONS from:", src)
+
+	if strings.HasPrefix(src, allowedIP+":") {
+
+		res := sip.NewResponseFromRequest(req, 200, "OK", body)
+
+		_ = tx.Respond(res)
+		return
+	}
+
+	log.Println("Received OPTIONS from a known valid source:", src)
+
+}
+
+func BridgeCall(d *diago.Diago, inDialog *diago.DialogServerSession, coreProxyUri sip.Uri) error {
 	inDialog.Trying()  // Progress -> 100 Trying
 	inDialog.Ringing() // Ringing -> 180 Response
 
@@ -78,8 +119,9 @@ func BridgeCall(d *diago.Diago, inDialog *diago.DialogServerSession, recipient s
 		return err
 	}
 
-	outDialog, err := d.InviteBridge(ctx, recipient, &bridge, diago.InviteOptions{})
+	outDialog, err := d.InviteBridge(ctx, coreProxyUri, &bridge, diago.InviteOptions{})
 	if err != nil {
+		t.Log("Dialing failed", err)
 		return err
 	}
 	defer outDialog.Close()
