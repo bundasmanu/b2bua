@@ -15,6 +15,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strconv"
 	"time"
 
 	"github.com/emiago/diago"
@@ -105,7 +106,7 @@ func handleOptions(req *sip.Request, tx sip.ServerTransaction) {
 		return
 	}
 
-	res := sip.NewResponseFromRequest(req, 200, "OK", "")
+	res := sip.NewResponseFromRequest(req, 200, "OK", nil)
 	_ = tx.Respond(res)
 }
 
@@ -125,7 +126,7 @@ func BridgeCall(d *diago.Diago, inDialog *diago.DialogServerSession) error {
 		return err
 	}
 
-	targetUri, err := resolver.NextRoundRobinURI(ctx, outboundProxy.Host, outboundProxy.Port)
+	targetUri, err := resolver.NextRoundRobinURI(ctx, outboundProxy.Host, strconv.Itoa(outboundProxy.Port))
 	if err != nil {
 		return err
 	}
