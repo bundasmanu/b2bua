@@ -11,9 +11,11 @@ package main
 import (
 	"context"
 	"flag"
+	"log"
 	"log/slog"
 	"os"
 	"os/signal"
+	"strconv"
 	"time"
 
 	"github.com/emiago/diago"
@@ -22,14 +24,11 @@ import (
 	"github.com/emiago/sipgo/sip"
 )
 
-// Have receiver running:
-// gophone answer -l "127.0.0.1:5090"
-//
-// Run app:
-// go run . sip:uas@127.0.0.1:5090
-//
-// Run dialer:
-// gophone dial sip:bob@127.0.0.1
+var (
+	resolver        = newDNSResolver()
+	localEndpoint   SIPEndpoint
+	outboundProxy   SIPEndpoint
+)
 
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
@@ -37,40 +36,89 @@ func main() {
 
 	examples.SetupLogger()
 
+	localAddrFlag := flag.String("local_addr", "udp:127.0.0.1:5060", "Local address to bind to. Format: [protocol:]host[:port]")
+	outboundProxyFlag := flag.String("outbound_proxy_addr", "127.0.0.1:5080", "Outbound proxy address. Format: host[:port]")
 	flag.Parse()
-	recipientUri := flag.Arg(0)
 
-	err := start(ctx, recipientUri)
+	localEndpoint = getSIPEndpoint(*localAddrFlag)
+	outboundProxy = getSIPEndpoint("udp:" + *outboundProxyFlag)
+	// Override port default for outbound proxy if not specified
+	if *outboundProxyFlag != "" && !containsColon(*outboundProxyFlag) {
+		outboundProxy.Port = 5080
+	}
+
+	err := start(ctx, localEndpoint)
 	if err != nil {
 		slog.Error("PBX finished with error", "error", err)
 	}
 }
 
-func start(ctx context.Context, recipientUri string) error {
-	// Setup our main transaction user
-	ua, _ := sipgo.NewUA()
-	d := diago.NewDiago(ua)
+func containsColon(s string) bool {
+	for _, ch := range s {
+		if ch == ':' {
+			return true
+		}
+	}
+	return false
+}
 
-	recipient := sip.Uri{}
-	if err := sip.ParseUri(recipientUri, &recipient); err != nil {
+func start(ctx context.Context, endpoint SIPEndpoint) error {
+	ua, err := sipgo.NewUA()
+	if err != nil {
 		return err
 	}
 
+	srv, err := sipgo.NewServer(ua)
+	if err != nil {
+		return err
+	}
+
+	d := diago.NewDiago(ua,
+		diago.WithTransport(diago.Transport{
+			Transport: endpoint.Protocol,
+			BindHost:  endpoint.Host,
+			BindPort:  endpoint.Port,
+		}),
+		diago.WithServer(srv),
+	)
+
+	srv.OnOptions(handleOptions)
+
 	return d.Serve(ctx, func(inDialog *diago.DialogServerSession) {
-		BridgeCall(d, inDialog, recipient)
+		if err := BridgeCall(d, inDialog); err != nil {
+			log.Println("bridge call failed:", err)
+		}
 	})
 }
 
-func BridgeCall(d *diago.Diago, inDialog *diago.DialogServerSession, recipient sip.Uri) error {
-	inDialog.Trying()  // Progress -> 100 Trying
-	inDialog.Ringing() // Ringing -> 180 Response
+func handleOptions(req *sip.Request, tx sip.ServerTransaction) {
+	src := req.Source()
+	log.Println("OPTIONS from:", src)
+
+	allowed, err := resolver.VerifySource(context.Background(), src, outboundProxy.Host)
+	if err != nil {
+		log.Println("failed to verify OPTIONS source", err)
+		return
+	}
+
+	if !allowed {
+		log.Println("OPTIONS source does not match resolved core proxy DNS", src)
+		return
+	}
+
+	res := sip.NewResponseFromRequest(req, 200, "OK", nil)
+	_ = tx.Respond(res)
+}
+
+func BridgeCall(d *diago.Diago, inDialog *diago.DialogServerSession) error {
+	inDialog.Trying()
+	inDialog.Ringing()
 
 	inCtx := inDialog.Context()
 	ctx, cancel := context.WithTimeout(inCtx, 5*time.Second)
 	defer cancel()
 
 	bridge := diago.NewBridge()
-	// Now answer our in dialog
 	if err := inDialog.Answer(); err != nil {
 		return err
 	}
@@ -78,7 +126,12 @@ func BridgeCall(d *diago.Diago, inDialog *diago.DialogServerSession, recipient s
 		return err
 	}
 
-	outDialog, err := d.InviteBridge(ctx, recipient, &bridge, diago.InviteOptions{})
+	targetUri, err := resolver.NextRoundRobinURI(ctx, outboundProxy.Host, strconv.Itoa(outboundProxy.Port))
+	if err != nil {
+		return err
+	}
+
+	outDialog, err := d.InviteBridge(ctx, targetUri, &bridge, diago.InviteOptions{})
 	if err != nil {
 		return err
 	}
@@ -88,10 +141,10 @@ func BridgeCall(d *diago.Diago, inDialog *diago.DialogServerSession, recipient s
 	defer inDialog.Hangup(inCtx)
 	defer outDialog.Hangup(outCtx)
 
-	// You can even easily detect who hangups
 	select {
 	case <-inCtx.Done():
 	case <-outCtx.Done():
 	}
 	return nil
 }
+
