@@ -7,7 +7,7 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 
-COPY src/main.go .
+COPY src/*.go .
 
 RUN CGO_ENABLED=0 go build -o b2bua .
 
