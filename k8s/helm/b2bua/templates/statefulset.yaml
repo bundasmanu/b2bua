@@ -41,6 +41,12 @@ spec:
         - name: INSTANCE_NAME
           value: {{ .Values.instanceName | quote }}
 
+        - name: LOCAL_SIP_ENDPOINT
+          value: "$(POD_NAME).$(INSTANCE_NAME).$(POD_NAMESPACE).svc.cluster.local"
+
+        - name: OUTBOUND_ADDR
+          value: "core-server.kamailio.svc.cluster.local"
+
         {{- range $key, $value := .Values.env }}
         - name: {{ $key }}
           value: {{ $value | quote }}
