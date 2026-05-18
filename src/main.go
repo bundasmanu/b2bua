@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/emiago/diago"
-	"github.com/emiago/diago/examples"
+	"github.com/emiago/diago/media"
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
 )
@@ -35,7 +35,7 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
-	examples.SetupLogger()
+	// examples.SetupLogger() media.DTLSConfig
 
 	localAddrFlag := flag.String("local_addr", "udp:127.0.0.1:5060", "Local address to bind to. Format: [protocol:]host[:port]")
 	outboundProxyFlag := flag.String("outbound_proxy_addr", "127.0.0.1:5080", "Outbound proxy address. Format: host[:port]")
@@ -76,10 +76,17 @@ func start(ctx context.Context, endpoint SIPEndpoint) error {
 
 	d := diago.NewDiago(ua,
 		diago.WithTransport(diago.Transport{
-			Transport: endpoint.Protocol,
-			BindHost:  endpoint.Host,
-			BindPort:  endpoint.Port,
+			Transport:     endpoint.Protocol,
+			BindHost:      endpoint.Host,
+			BindPort:      endpoint.Port,
+			MediaSRTP:     2, // USE DTLS
+			MediaDTLSConf: media.DTLSConfig{},
 		}),
+		diago.WithMediaConfig(
+			diago.MediaConfig{
+				Codecs: []media.Codec{media.CodecAudioUlaw, media.CodecAudioAlaw},
+			},
+		),
 		diago.WithServer(srv),
 	)
 
