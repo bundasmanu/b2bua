@@ -11,11 +11,12 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"log/slog"
+	"net"
 	"os"
 	"os/signal"
-	"strconv"
 	"time"
 
 	"github.com/emiago/diago"
@@ -25,9 +26,9 @@ import (
 )
 
 var (
-	resolver        = newDNSResolver()
-	localEndpoint   SIPEndpoint
-	outboundProxy   SIPEndpoint
+	resolver      = newDNSResolver()
+	localEndpoint SIPEndpoint
+	outboundProxy SIPEndpoint
 )
 
 func main() {
@@ -126,16 +127,50 @@ func BridgeCall(d *diago.Diago, inDialog *diago.DialogServerSession) error {
 		return err
 	}
 
-	targetUri, err := resolver.NextRoundRobinURI(ctx, outboundProxy.Host, strconv.Itoa(outboundProxy.Port))
+	source := inDialog.InviteRequest.Source()
+	sourceHost, _, err := net.SplitHostPort(source)
+	if err != nil {
+		sourceHost = source
+	}
+	remoteIP := net.ParseIP(sourceHost)
+	if remoteIP == nil {
+		return fmt.Errorf("invalid inbound source address %q", source)
+	}
+
+	allowed, err := resolver.IsResolvedIP(ctx, remoteIP, outboundProxy.Host)
 	if err != nil {
 		return err
 	}
+	if !allowed {
+		return fmt.Errorf("inbound source IP %s is not a resolved outbound proxy address", remoteIP)
+	}
 
-	outDialog, err := d.InviteBridge(ctx, targetUri, &bridge, diago.InviteOptions{})
+	targetURI := *inDialog.InviteRequest.Recipient.Clone()
+	headers := []sip.Header{}
+	if toHdr := inDialog.InviteRequest.To(); toHdr != nil {
+		headers = append(headers, sip.NewHeader("To", toHdr.Value()))
+	}
+
+	outDialog, err := d.NewDialog(targetURI, diago.NewDialogOptions{Transport: outboundProxy.Protocol})
 	if err != nil {
 		return err
 	}
 	defer outDialog.Close()
+	outDialog.InviteRequest.SetDestination(source)
+
+	if err := outDialog.Invite(ctx, diago.InviteClientOptions{
+		Originator: inDialog,
+		Headers:    headers,
+	}); err != nil {
+		return err
+	}
+
+	if err := bridge.AddDialogSession(outDialog); err != nil {
+		return err
+	}
+	if err := outDialog.Ack(ctx); err != nil {
+		return err
+	}
 	outCtx := outDialog.Context()
 
 	defer inDialog.Hangup(inCtx)
@@ -148,3 +183,9 @@ func BridgeCall(d *diago.Diago, inDialog *diago.DialogServerSession) error {
 	return nil
 }
 
+func buildBridgeTargetURI(requestURI sip.Uri, host string, port int) sip.Uri {
+	uri := requestURI.Clone()
+	uri.Host = host
+	uri.Port = port
+	return *uri
+}

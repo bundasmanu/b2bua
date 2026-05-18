@@ -71,12 +71,20 @@ func (r *dnsResolver) VerifySource(ctx context.Context, source, host string) (bo
 		return false, nil
 	}
 
+	return r.IsResolvedIP(ctx, remoteIP, host)
+}
+
+func (r *dnsResolver) IsResolvedIP(ctx context.Context, ip net.IP, host string) (bool, error) {
+	if ip == nil {
+		return false, nil
+	}
+
 	entry, err := r.ensureEntry(ctx, host)
 	if err != nil {
 		return false, err
 	}
 
-	if ipMatches(remoteIP, entry.ips) {
+	if ipMatches(ip, entry.ips) {
 		return true, nil
 	}
 
@@ -85,7 +93,7 @@ func (r *dnsResolver) VerifySource(ctx context.Context, source, host string) (bo
 		return false, err
 	}
 
-	return ipMatches(remoteIP, entry.ips), nil
+	return ipMatches(ip, entry.ips), nil
 }
 
 func (r *dnsResolver) NextRoundRobinURI(ctx context.Context, host, port string) (sip.Uri, error) {

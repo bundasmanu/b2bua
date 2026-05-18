@@ -45,7 +45,7 @@ spec:
           value: "$(POD_NAME).$(INSTANCE_NAME).$(POD_NAMESPACE).svc.cluster.local"
 
         - name: OUTBOUND_ADDR
-          value: "kamailio-core.kamailio.svc.cluster.local"
+          value: "kamailio-core.kamailio.svc.cluster.local:5060"
 
         {{- range $key, $value := .Values.env }}
         - name: {{ $key }}
