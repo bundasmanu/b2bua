@@ -39,7 +39,15 @@ func main() {
 
 	localAddrFlag := flag.String("local_addr", "udp:127.0.0.1:5060", "Local address to bind to. Format: [protocol:]host[:port]")
 	outboundProxyFlag := flag.String("outbound_proxy_addr", "127.0.0.1:5080", "Outbound proxy address. Format: host[:port]")
+	dtlsCertFlag := flag.String("dtls_cert", os.Getenv("DTLS_CERT_FILE"), "PEM file for the DTLS-SRTP certificate")
+	dtlsKeyFlag := flag.String("dtls_key", os.Getenv("DTLS_KEY_FILE"), "PEM file for the DTLS-SRTP private key")
 	flag.Parse()
+
+	dtlsConf, err := loadDTLSConfig(*dtlsCertFlag, *dtlsKeyFlag)
+	if err != nil {
+		slog.Error("DTLS configuration failed", "error", err)
+		os.Exit(1)
+	}
 
 	localEndpoint = getSIPEndpoint(*localAddrFlag)
 	outboundProxy = getSIPEndpoint("udp:" + *outboundProxyFlag)
@@ -48,8 +56,7 @@ func main() {
 		outboundProxy.Port = 5080
 	}
 
-	err := start(ctx, localEndpoint)
-	if err != nil {
+	if err := start(ctx, localEndpoint, dtlsConf); err != nil {
 		slog.Error("PBX finished with error", "error", err)
 	}
 }
@@ -63,7 +70,7 @@ func containsColon(s string) bool {
 	return false
 }
 
-func start(ctx context.Context, endpoint SIPEndpoint) error {
+func start(ctx context.Context, endpoint SIPEndpoint, dtlsConf media.DTLSConfig) error {
 	ua, err := sipgo.NewUA()
 	if err != nil {
 		return err
@@ -80,7 +87,7 @@ func start(ctx context.Context, endpoint SIPEndpoint) error {
 			BindHost:      endpoint.Host,
 			BindPort:      endpoint.Port,
 			MediaSRTP:     2, // USE DTLS
-			MediaDTLSConf: media.DTLSConfig{},
+			MediaDTLSConf: dtlsConf,
 		}),
 		diago.WithMediaConfig(
 			diago.MediaConfig{
