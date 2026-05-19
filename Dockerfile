@@ -19,6 +19,7 @@ RUN apk add --no-cache \
     ca-certificates \
     iproute2 \
     net-tools \
+    openssl \
     sngrep
 
 RUN addgroup -S b2bua && adduser -S b2bua -G b2bua
