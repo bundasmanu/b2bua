@@ -83,11 +83,11 @@ func start(ctx context.Context, endpoint SIPEndpoint, dtlsConf media.DTLSConfig)
 
 	d := diago.NewDiago(ua,
 		diago.WithTransport(diago.Transport{
-			Transport:     endpoint.Protocol,
-			BindHost:      endpoint.Host,
-			BindPort:      endpoint.Port,
-			MediaSRTP:     0, // USE DTLS
-			MediaDTLSConf: dtlsConf,
+			Transport: endpoint.Protocol,
+			BindHost:  endpoint.Host,
+			BindPort:  endpoint.Port,
+			//MediaSRTP:     0, // USE DTLS
+			//MediaDTLSConf: dtlsConf,
 		}),
 		diago.WithMediaConfig(
 			diago.MediaConfig{
