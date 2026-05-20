@@ -86,7 +86,7 @@ func start(ctx context.Context, endpoint SIPEndpoint, dtlsConf media.DTLSConfig)
 			Transport:     endpoint.Protocol,
 			BindHost:      endpoint.Host,
 			BindPort:      endpoint.Port,
-			MediaSRTP:     2, // USE DTLS
+			MediaSRTP:     0, // USE DTLS
 			MediaDTLSConf: dtlsConf,
 		}),
 		diago.WithMediaConfig(
