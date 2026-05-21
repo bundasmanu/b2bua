@@ -160,13 +160,6 @@ func BridgeCall(d *diago.Diago, inDialog *diago.DialogServerSession) error {
 	}
 
 	targetURI := *inDialog.InviteRequest.Recipient.Clone()
-	headers := []sip.Header{}
-	if toHdr := inDialog.InviteRequest.To(); toHdr != nil {
-		headers = append(headers, &sip.ToHeader{
-			DisplayName: toHdr.DisplayName,
-			Address:     *toHdr.Address.Clone(),
-		})
-	}
 
 	outDialog, err := d.NewDialog(targetURI, diago.NewDialogOptions{Transport: outboundProxy.Protocol})
 	if err != nil {
@@ -175,9 +168,10 @@ func BridgeCall(d *diago.Diago, inDialog *diago.DialogServerSession) error {
 	defer outDialog.Close()
 	outDialog.InviteRequest.SetDestination(source)
 
+	bridgeCopyHeaders(inDialog.InviteRequest, outDialog.InviteRequest)
+
 	if err := outDialog.Invite(ctx, diago.InviteClientOptions{
 		Originator: inDialog,
-		Headers:    headers,
 	}); err != nil {
 		return err
 	}
