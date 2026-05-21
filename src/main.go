@@ -162,7 +162,10 @@ func BridgeCall(d *diago.Diago, inDialog *diago.DialogServerSession) error {
 	targetURI := *inDialog.InviteRequest.Recipient.Clone()
 	headers := []sip.Header{}
 	if toHdr := inDialog.InviteRequest.To(); toHdr != nil {
-		headers = append(headers, sip.NewHeader("To", toHdr.Value()))
+		headers = append(headers, &sip.ToHeader{
+			DisplayName: toHdr.DisplayName,
+			Address:     *toHdr.Address.Clone(),
+		})
 	}
 
 	outDialog, err := d.NewDialog(targetURI, diago.NewDialogOptions{Transport: outboundProxy.Protocol})
